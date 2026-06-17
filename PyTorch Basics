@@ -24,3 +24,135 @@ c = torch.tensor(c)
 print(f"Tensor a: {a}")
 print(f"Tensor b: {b}")
 print(f"Tensor c: {c}")
+
+# There are also constructors for random numbers
+
+# Uniform distribution
+a = torch.rand(1, 3)
+
+# Normal distribution
+b = torch.randn(3, 4)
+
+# There are also constructors that allow us to construct
+# a tensor according to the above constructors, but with
+# dimensions equal to another tensor.
+
+c = torch.zeros_like(a)
+d = torch.rand_like(c)
+
+print(f"Tensor a: {a}")
+print(f"Tensor b: {b}")
+print(f"Tensor c: {c}")
+print(f"Tensor d: {d}")
+
+# Reproducibility: Because many “random” steps in machine learning affect the final result. For example, randomness can appear in:
+# random initialization: model weights start with random values
+# random data split: train/test split chooses random examples
+# random mini-batches: DataLoader shuffles data
+# dropout: some neurons are randomly turned off during training
+
+# PyTorch Random Number Generator (RNG): You can use torch.manual_seed() to seed the RNG for all devices (both CPU and GPU):
+
+import torch
+torch.manual_seed(0) #The number 0 is not special. You could also use others. Each seed gives a different repeatable random sequence.
+
+# for custom operators, set python seed as well
+import random
+random.seed(0)
+
+# Random number generators in other libraries (e.g., NumPy):
+import numpy as np
+np.random.seed(0)
+
+# seeding helper function that does all three above
+def set_seed(seed=None, seed_torch=True):
+  """
+  Function that controls randomness. NumPy and random modules must be imported.
+
+  Args:
+    seed : Integer
+      A non-negative integer that defines the random state. Default is `None`. 
+      # when calling the function, you do not have to provide a seed, the function randomly chooses one for you.
+    seed_torch : Boolean
+      If `True` sets the random seed for pytorch tensors, so pytorch module
+      must be imported. Default is `True`. #by default, the function will also set PyTorch’s random seed.
+
+  Returns:
+    Nothing.
+  """
+  if seed is None:
+    seed = np.random.choice(2 ** 32) # So this line chooses a random integer between 0 and 2**32 - 1.
+                                     # This is useful because the function will tell you which seed it picked at the end 
+  random.seed(seed)
+  np.random.seed(seed)
+  if seed_torch:
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+  print(f'Random seed {seed} has been set.') # So later, you can reuse that exact seed if you want to reproduce the result.
+# verification of the seeding helper function
+def simplefun(seed=True, my_seed=None):
+  """
+  Helper function to verify effectiveness of set_seed attribute
+  #if seed=False, set_seed function is not called, randomness not controlled
+  #if seed=True, my_seed = None, set_seed function is called, randomness not controlled, but we know the seed to reproduce
+  #if seed=True, my_seed = 0, set_seed function is called, randomness  controlled
+  Args:
+    seed: Boolean
+      Specifies if seed value is provided or not
+    my_seed: Integer
+      Initializes seed to specified value
+
+  Returns:
+    Nothing
+  """
+  if seed:
+    set_seed(seed=my_seed)
+
+  # uniform distribution
+  a = torch.rand(1, 3)
+  # normal distribution
+  b = torch.randn(3, 4)
+
+  print("Tensor a: ", a)
+  print("Tensor b: ", b)
+
+# Numpy-like number ranges
+a = torch.arange(0, 10, step=1) #[start, end), step = gap
+b = np.arange(0, 10, step=1)
+
+c = torch.linspace(0, 5, steps=11) #[start, end), steps = size
+d = np.linspace(0, 5, num=11)
+
+print(f"Tensor a: {a}\n") #\n adds extra blank line after printing
+print(f"Numpy array b: {b}\n")
+print(f"Tensor c: {c}\n")
+print(f"Numpy array d: {d}\n")
+
+# tensor-tensor operations
+a = torch.ones(5, 3)
+b = torch.rand(5, 3)
+c = torch.empty(5, 3) # or torch.empty_like(b)
+d = torch.empty(5, 3)
+
+# this only works if c and d already exist # and have the same shape as a and b
+torch.add(a, b, out=c)
+
+# Pointwise Multiplication of a and b
+torch.multiply(a, b, out=d)
+
+print(c)
+print(d)
+
+#However, in PyTorch, most common Python operators are overridden. 
+#The common standard arithmetic operators (+, −, ∗, /, and ∗∗) have all been lifted to elementwise operations
+
+x = torch.tensor([1, 2, 4, 8])
+y = torch.tensor([1, 2, 3, 4])
+x + y, x - y, x * y, x / y, x**y  # The `**` is the exponentiation operator
+
+# (tensor([ 2,  4,  7, 12]), tensor([0, 0, 1, 4]),tensor([ 1,  4, 12, 32]), tensor([1.0000, 1.0000, 1.3333, 2.0000]), tensor([   1,    4,   64, 4096]))
+
