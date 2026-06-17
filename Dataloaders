@@ -1,0 +1,29 @@
+# Import dataset and dataloaders related packages
+from torchvision import datasets
+from torchvision.transforms import ToTensor
+from torch.utils.data import DataLoader
+from torchvision.transforms import Compose, Grayscale
+
+# Download and load the images from the CIFAR10 dataset
+cifar10_data = datasets.CIFAR10(
+    root="data",  # path where the images will be stored
+    download=True,  # all images should be downloaded
+    transform=ToTensor()  # transform the images to tensors
+    )
+
+# Print the number of samples in the loaded dataset
+print(f"Number of samples: {len(cifar10_data)}")
+print(f"Class names: {cifar10_data.classes}")
+
+# Choose a random sample
+random.seed(2021)
+image, label = cifar10_data[random.randint(0, len(cifar10_data))]
+print(f"Label: {cifar10_data.classes[label]}")
+print(f"Image size: {image.shape}")
+#Color images are modeled as 3 dimensional tensors. 
+#The first dimension corresponds to the channels (C) of the image (in this case we have RGB images). 
+#The second dimensions is the height (H) of the image and the third is the width (W). 
+#We can denote this image format as C×H×W.
+#Since imshow from matplotlib expects to have the image in a different format, i.e., H×W×C. We permute the image tensor.
+plt.imshow(image.permute(1, 2, 0))
+plt.show()
