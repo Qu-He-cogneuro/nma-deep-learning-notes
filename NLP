@@ -1,0 +1,141 @@
+#tokenization
+from transformers import AutoTokenizer
+from datasets import load_dataset
+
+tokenizer = AutoTokenizer.from_pretrained("codeparrot/codeparrot-small") #codeparrot, a BPE tokenizer
+
+from transformers import AutoModelForCausalLM
+from transformers import pipeline
+
+model = AutoModelForCausalLM.from_pretrained("codeparrot/codeparrot-small")
+generation_pipeline = pipeline(
+    "text-generation", # The task to run. This tells hf what the pipeline steps are
+    model=model, # The model to use; can also pass the string here;
+    tokenizer=tokenizer, # The tokenizer to use; can also pass the string name here.
+)
+
+input_prompt = '''\
+def simple_add(a: int, b: int) -> int:
+    """
+    Adds two numbers together and returns the result.
+    """'''
+
+# Return tensors for PyTorch:
+inputs = tokenizer(input_prompt, return_tensors="pt")
+
+#print out to check the tokenization
+input_token_ids = inputs["input_ids"]
+input_strs = tokenizer.convert_ids_to_tokens(*input_token_ids.tolist())
+print(*zip(input_strs, input_token_ids[0]))
+
+#generating python
+outputs = generation_pipeline(input_prompt, max_length=100, num_return_sequences=1, temperature=0.2, truncation=True)
+#num_return_sequences defines how many possible continuations to be generated
+#temperature defines randomness, 0.2 is a good starting point
+
+#distribution shift problem when generating javascript
+input_prompt = "class SimpleAdder {"
+print(generation_pipeline(input_prompt, max_length=100, num_return_sequences=1, temperature=0.2)[0]["generated_text"])
+
+#Fine-tuning for javascript
+# Unlike _some_ code-generator models on the market, we'll limit our training data by license :)
+dataset = load_dataset(
+    "codeparrot/github-code",
+    streaming=True,
+    split="train",
+    languages=["JavaScript"],
+    licenses=["mit", "isc", "apache-2.0"],
+    trust_remote_code=True,
+)
+# Print the schema of the first example from the training set:
+print({k: type(v) for k, v in next(iter(dataset)).items()})
+
+from transformers import TrainingArguments, Trainer, DataCollatorForLanguageModeling
+from evaluate import load
+metric = load("accuracy") #Define our metrics. We use the accuracy metric here
+#Create a TrainingArguments object. This serializable object (i.e., you can save it to memory or disk) makes it easy to train a model reproducibly with the same hyperparameters (this certainly beats having a bunch of global variables in your notebook!).
+training_args = TrainingArguments(
+    output_dir="./codeparrot",
+    max_steps=100,
+    per_device_train_batch_size=1,
+    report_to="none",
+)
+
+#Encode the dataset. This is effectively just passing everything through the tokenizer, with a padding step that fills the end of each sequence with the padding token.
+tokenizer.pad_token = tokenizer.eos_token
+
+encoded_dataset = dataset.map(
+    lambda x: tokenizer(x["code"], truncation=True, padding="max_length"),
+    batched=True,
+    remove_columns=["code"],
+)
+
+# Metrics for loss:
+def compute_metrics(eval_pred):
+  predictions, labels = eval_pred
+  predictions = np.argmax(predictions, axis=-1)
+  return metric.compute(predictions=predictions, references=labels)
+
+#Create a data collator. This function takes a list of examples and returns a batch of examples. The DataCollatorForLanguageModeling class is a convenient way to do this.
+# Data collator:
+data_collator = DataCollatorForLanguageModeling(
+    tokenizer=tokenizer, mlm=False,
+)
+
+#Create a Trainer object. This class wraps the training loop and makes it easy to train a model. It's a bit like the Trainer class in PyTorch Lightning, but it's a bit more flexible and works with non-PyTorch models as well.
+# Trainer:
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=encoded_dataset,
+    processing_class=tokenizer,
+    compute_metrics=compute_metrics,
+    data_collator=data_collator,
+)
+
+# Run the actual training:
+trainer.train()
+
+#check the fine-tuned model
+def generate_text(model, input_prompt):
+  # Number of tokens to generate
+  num_tokens = 100
+
+  # Move the model to the CPU for inference
+  model.to("cpu")
+
+  # Print input prompt
+  print(f'Input prompt: \n{input_prompt}')
+
+  # Encode the input prompt
+  # https://huggingface.co/docs/transformers/en/main_classes/tokenizer
+  input_tokens = tokenizer.encode(input_prompt)
+
+  # Turn off storing gradients
+  with torch.no_grad():
+    # Keep iterating until num_tokens are generated
+    for tkn_idx in tqdm(range(num_tokens)):
+      # Forward pass through the model
+      output = model(torch.LongTensor(input_tokens).unsqueeze(0))
+      logits = output.logits[0, -1, :]
+      # Convert into probabilities
+      probs = nn.functional.softmax(logits, dim=-1)
+      # Get the index of top token
+      top_token = torch.argmax(probs).item()
+      # Append the token into the input sequence
+      input_tokens.append(top_token)
+
+  # Decode and print the generated text
+  # https://huggingface.co/docs/transformers/en/main_classes/tokenizer
+  decoded_text = tokenizer.decode(input_tokens)
+  return decoded_text
+
+print(f'Generated text: \n{generate_text(model, input_prompt)}')
+
+
+
+
+
+
+
+
